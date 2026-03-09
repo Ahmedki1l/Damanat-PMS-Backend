@@ -1,0 +1,217 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum GlobalRole {
+  SUPER_ADMIN
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum SiteRole {
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum ZoneType {
+  PARKING
+  RESTRICTED
+  INTRUSION
+  OTHER
+}
+
+enum CameraRole {
+  OCCUPANCY
+  ENTRY
+  EXIT
+  VIOLATION
+  INTRUSION
+}
+
+// ─── Core Backend Tables (owned by this service) ────────────────────────────
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  passwordHash String         @map("password_hash")
+  name         String
+  role         GlobalRole     @default(VIEWER)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  siteRoles    UserSiteRole[]
+
+  @@map("users")
+}
+
+model UserSiteRole {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  siteId    String   @map("site_id")
+  role      SiteRole
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, siteId])
+  @@map("user_site_roles")
+}
+
+model Site {
+  id           String         @id @default(uuid())
+  name         String
+  code         String?
+  location     String?
+  description  String?
+  pmsAiBaseUrl String?        @map("pms_ai_base_url")
+  pmsAiApiKey  String?        @map("pms_ai_api_key")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  floors    Floor[]
+  cameras   CameraConfig[]
+  userRoles UserSiteRole[]
+
+  @@map("sites")
+}
+
+model Floor {
+  id        String   @id @default(uuid())
+  siteId    String   @map("site_id")
+  name      String
+  level     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  site    Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  zones   Zone[]
+  cameras CameraConfig[]
+
+  @@map("floors")
+}
+
+model Zone {
+  id          String   @id @default(uuid())
+  floorId     String   @map("floor_id")
+  name        String
+  type        ZoneType @default(PARKING)
+  description String?
+  maxCapacity Int      @default(10) @map("max_capacity")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  floor   Floor          @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  cameras CameraConfig[]
+
+  @@map("zones")
+}
+
+model CameraConfig {
+  id                String     @id @default(uuid())
+  siteId            String     @map("site_id")
+  floorId           String     @map("floor_id")
+  zoneId            String?    @map("zone_id")
+  name              String
+  ip                String
+  username          String
+  passwordEncrypted String     @map("password_encrypted")
+  model             String?
+  role              CameraRole @default(OCCUPANCY)
+  isActive          Boolean    @default(true) @map("is_active")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+
+  site  Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  floor Floor @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  zone  Zone? @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+
+  @@map("cameras_config")
+}
+
+// ─── PMS AI Tables (read-only, owned by FastAPI service) ────────────────────
+// These tables already exist from PMS AI's SQLAlchemy. We map them here
+// so the Core Backend can query analytics without HTTP calls.
+// DO NOT run migrations against these — they are managed by PMS AI.
+
+model CameraEvent {
+  id               Int       @id @default(autoincrement())
+  cameraId         String    @map("camera_id")
+  deviceSerial     String?   @map("device_serial")
+  channelId        Int?      @map("channel_id")
+  eventType        String    @map("event_type")
+  eventState       String?   @map("event_state")
+  eventDescription String?   @map("event_description")
+  detectionTarget  String?   @map("detection_target")
+  regionId         String?   @map("region_id")
+  channelName      String?   @map("channel_name")
+  triggerTime      DateTime? @map("trigger_time")
+  snapshotPath     String?   @map("snapshot_path")
+  rawPayload       String?   @map("raw_payload")
+  createdAt        DateTime  @map("created_at")
+
+  @@map("camera_events")
+}
+
+model ZoneOccupancy {
+  id           Int       @id @default(autoincrement())
+  zoneId       String    @unique @map("zone_id")
+  cameraId     String    @map("camera_id")
+  currentCount Int       @default(0) @map("current_count")
+  maxCapacity  Int       @default(10) @map("max_capacity")
+  lastUpdated  DateTime? @map("last_updated")
+
+  @@map("zone_occupancy")
+}
+
+model Alert {
+  id          Int       @id @default(autoincrement())
+  alertType   String    @map("alert_type")
+  cameraId    String    @map("camera_id")
+  zoneId      String?   @map("zone_id")
+  eventType   String?   @map("event_type")
+  description String?
+  isResolved  Int       @default(0) @map("is_resolved")
+  triggeredAt DateTime  @map("triggered_at")
+  resolvedAt  DateTime? @map("resolved_at")
+
+  @@map("alerts")
+}
+
+model Vehicle {
+  id           Int       @id @default(autoincrement())
+  plateNumber  String    @unique @map("plate_number")
+  ownerName    String    @map("owner_name")
+  vehicleType  String    @map("vehicle_type")
+  employeeId   String?   @map("employee_id")
+  isRegistered Int       @default(1) @map("is_registered")
+  registeredAt DateTime? @map("registered_at")
+  notes        String?
+
+  @@map("vehicles")
+}
+
+model EntryExitLog {
+  id              Int       @id @default(autoincrement())
+  plateNumber     String    @map("plate_number")
+  vehicleId       Int?      @map("vehicle_id")
+  vehicleType     String?   @map("vehicle_type")
+  gate            String
+  cameraId        String    @map("camera_id")
+  eventTime       DateTime  @map("event_time")
+  parkingDuration Int?      @map("parking_duration")
+  matchedEntryId  Int?      @map("matched_entry_id")
+  createdAt       DateTime? @map("created_at")
+
+  @@map("entry_exit_log")
+}

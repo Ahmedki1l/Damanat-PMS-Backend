@@ -1,0 +1,28 @@
+// src/modules/pms/pms.controller.ts
+import { Request, Response } from 'express';
+import * as pmsService from './pms.service';
+
+export async function getOccupancy(req: Request, res: Response) {
+  const data = await pmsService.getOccupancy(req.params.id as string);
+  res.json({ status: 'success', data });
+}
+
+export async function getAlerts(req: Request, res: Response) {
+  const data = await pmsService.getAlerts(
+    req.params.id as string,
+    req.query.alertType as string | undefined,
+    req.query.isResolved as string | undefined,
+  );
+  res.json({ status: 'success', data });
+}
+
+export async function getEvents(req: Request, res: Response) {
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+  const data = await pmsService.getEvents(req.params.id as string, limit);
+  res.json({ status: 'success', data });
+}
+
+export async function getHealth(req: Request, res: Response) {
+  const data = await pmsService.proxyPmsHealth(req.params.id as string);
+  res.json({ status: 'success', data });
+}
