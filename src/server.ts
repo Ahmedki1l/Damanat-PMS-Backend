@@ -3,14 +3,23 @@ import app from './app';
 import { env } from './config/env';
 import { logger } from './utils/logger';
 import { prisma } from './config/prisma';
+import { connectMongo, disconnectMongo } from './config/mongo';
 
 async function main() {
-  // Test database connection
+  // Connect PostgreSQL
   try {
     await prisma.$connect();
-    logger.info('✅ Database connected');
+    logger.info('✅ PostgreSQL connected');
   } catch (err) {
-    logger.error(err, '❌ Database connection failed');
+    logger.error(err, '❌ PostgreSQL connection failed');
+    process.exit(1);
+  }
+
+  // Connect MongoDB
+  try {
+    await connectMongo();
+  } catch (err) {
+    logger.error(err, '❌ MongoDB connection failed');
     process.exit(1);
   }
 
@@ -25,12 +34,14 @@ async function main() {
 process.on('SIGINT', async () => {
   logger.info('🛑 Shutting down...');
   await prisma.$disconnect();
+  await disconnectMongo();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   logger.info('🛑 Shutting down...');
   await prisma.$disconnect();
+  await disconnectMongo();
   process.exit(0);
 });
 

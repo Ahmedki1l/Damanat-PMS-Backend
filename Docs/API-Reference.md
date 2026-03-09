@@ -801,6 +801,198 @@ Check PMS AI service health via HTTP proxy.
 
 ---
 
+## 8. Parking Times (MongoDB)
+
+Vehicle entry/exit session tracking stored in MongoDB. One document per license plate, structured as **plate → day → sessions**.
+
+> **Data source:** MongoDB `parking_times` collection  
+> **Local setup:** `docker-compose up -d` (spins up Mongo 7 on port 27017)
+
+### `POST /sites/:siteId/parking-times/entry`
+
+Record a vehicle entry. Creates the plate document if new; pushes a session with `exitAt: null`.
+
+**Auth:** Bearer Token
+
+**Request Body:**
+| Field | Type | Required |
+|-------|------|----------|
+| `plate` | string | ✅ |
+| `entryAt` | ISO string | ❌ (defaults to now) |
+| `entryCamera` | string | ✅ |
+| `zone` | string | ❌ |
+
+**Example:**
+```json
+{
+  "plate": "ABC-1234",
+  "entryCamera": "CAM-01",
+  "zone": "parking-row-A"
+}
+```
+
+**Response `201`:**
+```json
+{
+  "status": "success",
+  "data": {
+    "sessionId": "uuid",
+    "plate": "ABC-1234",
+    "day": "2026-03-10",
+    "entryAt": "2026-03-10T08:12:00.000Z"
+  }
+}
+```
+
+---
+
+### `POST /sites/:siteId/parking-times/exit`
+
+Record a vehicle exit. Closes the latest open session for today, computes `durationMinutes`.
+
+**Auth:** Bearer Token
+
+**Request Body:**
+| Field | Type | Required |
+|-------|------|----------|
+| `plate` | string | ✅ |
+| `exitAt` | ISO string | ❌ (defaults to now) |
+| `exitCamera` | string | ✅ |
+
+**Example:**
+```json
+{
+  "plate": "ABC-1234",
+  "exitCamera": "CAM-03"
+}
+```
+
+**Response `200`:**
+```json
+{
+  "status": "success",
+  "data": {
+    "plate": "ABC-1234",
+    "sessionId": "uuid",
+    "day": "2026-03-10",
+    "exitAt": "2026-03-10T09:45:00.000Z",
+    "durationMinutes": 93
+  }
+}
+```
+
+**Errors:** `404` Plate not found · `400` No open session
+
+---
+
+### `GET /sites/:siteId/parking-times/:plate`
+
+Get full history for a license plate.
+
+**Auth:** Bearer Token
+
+**Response `200`:**
+```json
+{
+  "status": "success",
+  "data": {
+    "plate": "ABC-1234",
+    "siteId": "uuid",
+    "totalVisits": 15,
+    "firstSeen": "2026-03-01T08:00:00Z",
+    "lastSeen": "2026-03-10T14:00:00Z",
+    "days": {
+      "2026-03-10": {
+        "sessions": [
+          {
+            "sessionId": "uuid",
+            "entryAt": "2026-03-10T08:12:00Z",
+            "exitAt": "2026-03-10T09:45:00Z",
+            "durationMinutes": 93,
+            "entryCamera": "CAM-01",
+            "exitCamera": "CAM-03",
+            "zone": "parking-row-A"
+          }
+        ],
+        "totalSessions": 1,
+        "totalDurationMinutes": 93
+      }
+    }
+  }
+}
+```
+
+---
+
+### `GET /sites/:siteId/parking-times/:plate/day/:date`
+
+Get sessions for a specific day (`date` = `YYYY-MM-DD`).
+
+**Auth:** Bearer Token
+
+**Response `200`:**
+```json
+{
+  "status": "success",
+  "data": {
+    "plate": "ABC-1234",
+    "date": "2026-03-10",
+    "sessions": [...],
+    "totalSessions": 2,
+    "totalDurationMinutes": 150
+  }
+}
+```
+
+---
+
+### `GET /sites/:siteId/parking-times/active`
+
+List all vehicles currently parked (open sessions today where `exitAt` is null).
+
+**Auth:** Bearer Token
+
+**Response `200`:**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "plate": "ABC-1234",
+      "entryAt": "2026-03-10T14:00:00Z",
+      "entryCamera": "CAM-01",
+      "zone": "parking-row-A",
+      "firstSeen": "2026-03-01T08:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### `GET /sites/:siteId/parking-times/stats`
+
+Aggregate parking statistics for the site.
+
+**Auth:** Bearer Token
+
+**Response `200`:**
+```json
+{
+  "status": "success",
+  "data": {
+    "totalPlates": 142,
+    "activeNow": 8,
+    "totalVisits": 1560,
+    "avgVisitsPerPlate": 11.0,
+    "repeatVisitors": 98,
+    "date": "2026-03-10"
+  }
+}
+```
+
+---
+
 ## Error Format
 
 All errors follow a consistent format:

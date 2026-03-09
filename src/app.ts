@@ -14,6 +14,7 @@ import floorsRoutes from './modules/floors/floors.routes';
 import zonesRoutes from './modules/zones/zones.routes';
 import camerasRoutes from './modules/cameras/cameras.routes';
 import pmsRoutes from './modules/pms/pms.routes';
+import parkingTimesRoutes from './modules/parking-times/parking-times.routes';
 
 const app = express();
 
@@ -39,6 +40,7 @@ app.use('/api/v1/zones', zonesRoutes);                   // direct
 app.use('/api/v1/sites/:siteId/cameras', camerasRoutes); // nested
 app.use('/api/v1/cameras', camerasRoutes);               // direct
 app.use('/api/v1/sites', pmsRoutes);                     // PMS proxy: /sites/:id/occupancy, etc.
+app.use('/api/v1/sites/:siteId/parking-times', parkingTimesRoutes); // MongoDB parking times
 
 // ── 404 Handler ─────────────────────────────────────────────────────────────
 app.use((_req, res) => {

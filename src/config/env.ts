@@ -14,6 +14,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   CAMERA_ENCRYPTION_KEY: z.string().length(64),
   PMS_AI_DEFAULT_URL: z.string().url().optional(),
+  MONGODB_URI: z.string().default('mongodb://localhost:27017'),
+  MONGODB_DB_NAME: z.string().default('damanat_pms'),
 });
 
 const parsed = envSchema.safeParse(process.env);

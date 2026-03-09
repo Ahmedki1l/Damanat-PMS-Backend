@@ -1,0 +1,17 @@
+# Docker Compose for local MongoDB
+# Run: docker-compose up -d
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: damanat-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: damanat_pms
+
+volumes:
+  mongo_data:
