@@ -18,17 +18,19 @@ import { logger } from '../../utils/logger';
 export async function getOccupancy(siteId: string) {
   await verifySite(siteId);
 
-  // Get all cameras for this site, then find occupancy data for their zones
-  const cameras = await prisma.cameraConfig.findMany({
-    where: { siteId },
-    select: { name: true, zoneId: true, zone: { select: { name: true } } },
+  // Get all parking zones for this site
+  const parkingZones = await prisma.zone.findMany({
+    where: { type: 'PARKING', floor: { siteId } },
+    select: { id: true, name: true, maxCapacity: true },
   });
+
+  const parkingZoneIds = new Set(parkingZones.map((z: any) => z.id));
 
   const occupancy = await prisma.zoneOccupancy.findMany({
     orderBy: { lastUpdated: 'desc' },
   });
 
-  return occupancy.map((z: any) => ({
+  const zones = occupancy.map((z: any) => ({
     zoneId: z.zoneId,
     cameraId: z.cameraId,
     currentCount: z.currentCount,
@@ -37,6 +39,87 @@ export async function getOccupancy(siteId: string) {
     isFull: z.maxCapacity > 0 ? z.currentCount >= z.maxCapacity : false,
     lastUpdated: z.lastUpdated,
   }));
+
+  // Total across parking zones only
+  const parkingOccupancy = occupancy.filter((z: any) => parkingZoneIds.has(z.zoneId));
+  const totalCurrentCount = parkingOccupancy.reduce((sum: number, z: any) => sum + z.currentCount, 0);
+  const totalMaxCapacity   = parkingZones.reduce((sum: number, z: any) => sum + z.maxCapacity, 0);
+
+  return {
+    total: {
+      currentCount: totalCurrentCount,
+      maxCapacity: totalMaxCapacity,
+      percentage: totalMaxCapacity > 0 ? Math.round((totalCurrentCount / totalMaxCapacity) * 100) : 0,
+      isFull: totalMaxCapacity > 0 ? totalCurrentCount >= totalMaxCapacity : false,
+    },
+    zones,
+  };
+}
+
+export async function occupancyEntry(siteId: string, zoneId: string, cameraId: string) {
+  await verifySite(siteId);
+
+  const zone = await prisma.zone.findUnique({ where: { id: zoneId } });
+  if (!zone) throw ApiError.notFound('Zone not found');
+
+  const row = await prisma.zoneOccupancy.upsert({
+    where: { zoneId },
+    create: {
+      zoneId,
+      cameraId,
+      currentCount: 1,
+      maxCapacity: zone.maxCapacity,
+      lastUpdated: new Date(),
+    },
+    update: {
+      currentCount: { increment: 1 },
+      cameraId,
+      lastUpdated: new Date(),
+    },
+  });
+
+  return buildOccupancyResponse(row);
+}
+
+export async function occupancyExit(siteId: string, zoneId: string, cameraId: string) {
+  await verifySite(siteId);
+
+  const zone = await prisma.zone.findUnique({ where: { id: zoneId } });
+  if (!zone) throw ApiError.notFound('Zone not found');
+
+  // Atomic decrement floored at 0
+  await prisma.$executeRaw`
+    UPDATE zone_occupancy
+    SET current_count = GREATEST(current_count - 1, 0),
+        camera_id     = ${cameraId},
+        last_updated  = NOW()
+    WHERE zone_id = ${zoneId}
+  `;
+
+  const row = await prisma.zoneOccupancy.upsert({
+    where: { zoneId },
+    create: {
+      zoneId,
+      cameraId,
+      currentCount: 0,
+      maxCapacity: zone.maxCapacity,
+      lastUpdated: new Date(),
+    },
+    update: { lastUpdated: new Date() }, // already updated by executeRaw above
+  });
+
+  return buildOccupancyResponse(row);
+}
+
+function buildOccupancyResponse(row: any) {
+  return {
+    zoneId:       row.zoneId,
+    currentCount: row.currentCount,
+    maxCapacity:  row.maxCapacity,
+    percentage:   row.maxCapacity > 0 ? Math.round((row.currentCount / row.maxCapacity) * 100) : 0,
+    isFull:       row.maxCapacity > 0 ? row.currentCount >= row.maxCapacity : false,
+    lastUpdated:  row.lastUpdated,
+  };
 }
 
 export async function getAlerts(siteId: string, alertType?: string, isResolved?: string) {
@@ -53,6 +136,15 @@ export async function getAlerts(siteId: string, alertType?: string, isResolved?:
   });
 
   return alerts;
+}
+
+export async function getEntryExitLog(siteId: string, limit = 50) {
+  await verifySite(siteId);
+
+  return prisma.entryExitLog.findMany({
+    orderBy: { eventTime: 'desc' },
+    take: limit,
+  });
 }
 
 export async function getEvents(siteId: string, limit = 50) {

@@ -9,9 +9,10 @@ async function main() {
   // Connect PostgreSQL
   try {
     await prisma.$connect();
-    logger.info('✅ PostgreSQL connected');
+    await prisma.$queryRaw`SELECT 1`;   // forces actual TCP connection
+    logger.info('PostgreSQL connected');
   } catch (err) {
-    logger.error(err, '❌ PostgreSQL connection failed');
+    logger.error(err, 'PostgreSQL connection failed');
     process.exit(1);
   }
 
@@ -19,7 +20,7 @@ async function main() {
   try {
     await connectMongo();
   } catch (err) {
-    logger.error(err, '❌ MongoDB connection failed');
+    logger.error(err, 'MongoDB connection failed');
     process.exit(1);
   }
 
@@ -32,14 +33,14 @@ async function main() {
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  logger.info('🛑 Shutting down...');
+  logger.info('Shutting down...');
   await prisma.$disconnect();
   await disconnectMongo();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  logger.info('🛑 Shutting down...');
+  logger.info('Shutting down...');
   await prisma.$disconnect();
   await disconnectMongo();
   process.exit(0);

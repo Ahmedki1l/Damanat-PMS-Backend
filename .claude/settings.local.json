@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"D:\\\\Work\\\\Spectech\\\\Projects\\\\Damanat PMS Cameras\\\\Project\\\\Backend\" && npx prisma db push 2>&1)",
+      "Bash(cd \"D:\\\\Work\\\\Spectech\\\\Projects\\\\Damanat PMS Cameras\\\\Project\\\\Backend\" && timeout 10 npm run dev 2>&1 || true)",
+      "Bash(cd \"D:\\\\Work\\\\Spectech\\\\Projects\\\\Damanat PMS Cameras\\\\Project\\\\Backend\" && npx tsx prisma/seed.ts 2>&1)",
+      "Bash(docker exec:*)",
+      "Bash(cd \"D:\\\\Work\\\\Spectech\\\\Projects\\\\Damanat PMS Cameras\\\\Project\\\\Backend\" && timeout 8 npm run dev 2>&1 || true)"
+    ]
+  }
+}

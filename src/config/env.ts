@@ -16,6 +16,7 @@ const envSchema = z.object({
   PMS_AI_DEFAULT_URL: z.string().url().optional(),
   MONGODB_URI: z.string().default('mongodb://localhost:27017'),
   MONGODB_DB_NAME: z.string().default('damanat_pms'),
+  SERVICE_API_KEY: z.string().min(16).optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

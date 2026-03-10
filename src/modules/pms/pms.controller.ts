@@ -22,6 +22,24 @@ export async function getEvents(req: Request, res: Response) {
   res.json({ status: 'success', data });
 }
 
+export async function occupancyEntry(req: Request, res: Response) {
+  const { zoneId, cameraId } = req.body;
+  const data = await pmsService.occupancyEntry(req.params.id as string, zoneId, cameraId);
+  res.json({ status: 'success', data });
+}
+
+export async function occupancyExit(req: Request, res: Response) {
+  const { zoneId, cameraId } = req.body;
+  const data = await pmsService.occupancyExit(req.params.id as string, zoneId, cameraId);
+  res.json({ status: 'success', data });
+}
+
+export async function getEntryExitLog(req: Request, res: Response) {
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+  const data = await pmsService.getEntryExitLog(req.params.id as string, limit);
+  res.json({ status: 'success', data });
+}
+
 export async function getHealth(req: Request, res: Response) {
   const data = await pmsService.proxyPmsHealth(req.params.id as string);
   res.json({ status: 'success', data });

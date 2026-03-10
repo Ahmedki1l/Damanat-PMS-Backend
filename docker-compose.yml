@@ -1,4 +1,4 @@
-# Docker Compose for local MongoDB
+# Docker Compose for local development (MongoDB + PostgreSQL)
 # Run: docker-compose up -d
 
 services:
@@ -13,5 +13,19 @@ services:
     environment:
       MONGO_INITDB_DATABASE: damanat_pms
 
+  postgres:
+    image: postgres:16
+    container_name: damanat-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: damanat
+      POSTGRES_PASSWORD: damanat
+      POSTGRES_DB: damanat_db
+
 volumes:
   mongo_data:
+  postgres_data:
