@@ -1,10 +1,12 @@
 // src/utils/logger.ts
 import pino from 'pino';
 
-const isDev = process.env.NODE_ENV !== 'production';
+// Use pino-pretty only when running in a local TTY (dev terminal).
+// Serverless environments (Vercel) have no TTY — plain JSON logging is used.
+const usePretty = Boolean(process.stdout.isTTY) && process.env.NODE_ENV !== 'production';
 
 export const logger = pino(
-  isDev
+  usePretty
     ? {
         transport: {
           target: 'pino-pretty',
