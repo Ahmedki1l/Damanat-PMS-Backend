@@ -24,6 +24,14 @@ async function ensureConnections() {
 
 // Vercel calls this as the request handler
 export default async function handler(req: any, res: any) {
-  await ensureConnections();
-  app(req, res);
+  try {
+    await ensureConnections();
+    app(req, res);
+  } catch (err: any) {
+    res.status(500).json({
+      error: err.message,
+      type: err.constructor?.name,
+      stack: err.stack,
+    });
+  }
 }
