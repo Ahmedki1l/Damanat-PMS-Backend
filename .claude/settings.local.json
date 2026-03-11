@@ -5,7 +5,12 @@
       "Bash(cd \"D:\\\\Work\\\\Spectech\\\\Projects\\\\Damanat PMS Cameras\\\\Project\\\\Backend\" && timeout 10 npm run dev 2>&1 || true)",
       "Bash(cd \"D:\\\\Work\\\\Spectech\\\\Projects\\\\Damanat PMS Cameras\\\\Project\\\\Backend\" && npx tsx prisma/seed.ts 2>&1)",
       "Bash(docker exec:*)",
-      "Bash(cd \"D:\\\\Work\\\\Spectech\\\\Projects\\\\Damanat PMS Cameras\\\\Project\\\\Backend\" && timeout 8 npm run dev 2>&1 || true)"
+      "Bash(cd \"D:\\\\Work\\\\Spectech\\\\Projects\\\\Damanat PMS Cameras\\\\Project\\\\Backend\" && timeout 8 npm run dev 2>&1 || true)",
+      "Bash(cd \"D:\\\\Work\\\\Spectech\\\\Projects\\\\Damanat PMS Cameras\\\\Project\\\\Backend\" && npx tsc --noEmit 2>&1)",
+      "WebFetch(domain:damanat-pms-backend.vercel.app)",
+      "Bash(ping -n 35 127.0.0.1 > nul 2>&1 && echo done)",
+      "Bash(ping -n 40 127.0.0.1 > nul 2>&1 && echo done)",
+      "Bash(curl -s -X POST https://damanat-pms-backend.vercel.app/api/v1/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"admin@damanat.com\\\\\",\\\\\"password\\\\\":\\\\\"admin123\\\\\"}\" 2>&1)"
     ]
   }
 }

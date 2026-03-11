@@ -159,6 +159,7 @@ model CameraEvent {
   snapshotPath     String?   @map("snapshot_path")
   rawPayload       String?   @map("raw_payload")
   createdAt        DateTime  @map("created_at")
+  isTest           Boolean?  @map("is_test")
 
   @@map("camera_events")
 }
@@ -175,15 +176,17 @@ model ZoneOccupancy {
 }
 
 model Alert {
-  id          Int       @id @default(autoincrement())
-  alertType   String    @map("alert_type")
-  cameraId    String    @map("camera_id")
-  zoneId      String?   @map("zone_id")
-  eventType   String?   @map("event_type")
-  description String?
-  isResolved  Int       @default(0) @map("is_resolved")
-  triggeredAt DateTime  @map("triggered_at")
-  resolvedAt  DateTime? @map("resolved_at")
+  id           Int       @id @default(autoincrement())
+  alertType    String    @map("alert_type")
+  cameraId     String    @map("camera_id")
+  zoneId       String?   @map("zone_id")
+  eventType    String?   @map("event_type")
+  description  String?
+  isResolved   Boolean   @default(false) @map("is_resolved")
+  triggeredAt  DateTime  @map("triggered_at")
+  resolvedAt   DateTime? @map("resolved_at")
+  snapshotPath String?   @map("snapshot_path")
+  isTest       Boolean?  @map("is_test")
 
   @@map("alerts")
 }
@@ -212,6 +215,8 @@ model EntryExitLog {
   parkingDuration Int?      @map("parking_duration")
   matchedEntryId  Int?      @map("matched_entry_id")
   createdAt       DateTime? @map("created_at")
+  snapshotPath    String?   @map("snapshot_path")
+  isTest          Boolean?  @map("is_test")
 
   @@map("entry_exit_log")
 }
