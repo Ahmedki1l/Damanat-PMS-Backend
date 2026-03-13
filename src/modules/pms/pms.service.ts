@@ -21,7 +21,9 @@ const ZONE_FILL_ORDER = ['B1-PARKING', 'B2-PARKING', 'GF-PARKING'];
 export async function getOccupancy(siteId: string) {
   await verifySite(siteId);
 
-  // 1. Count vehicles currently inside: entered but not yet exited, no test data
+  // 1. Count vehicles currently inside: entered but not yet exited, no test data.
+  //    Also exclude ghost/duplicate ANPR triggers — entries that appear within
+  //    2 minutes after an exit for the same plate (camera re-reads plate as car drives away).
   const activeResult = await prisma.$queryRaw<[{ count: bigint }]>`
     SELECT COUNT(*) AS count
     FROM entry_exit_log e
@@ -29,8 +31,15 @@ export async function getOccupancy(siteId: string) {
       AND (e.is_test IS NULL OR e.is_test = false)
       AND NOT EXISTS (
         SELECT 1 FROM entry_exit_log x
-        WHERE x.gate    = 'exit'
+        WHERE x.gate             = 'exit'
           AND x.matched_entry_id = e.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM entry_exit_log prev
+        WHERE prev.gate         = 'exit'
+          AND prev.plate_number = e.plate_number
+          AND prev.event_time  >= e.event_time - INTERVAL '2 minutes'
+          AND prev.event_time  <= e.event_time
       )
   `;
   const activeCount = Number(activeResult[0].count);
@@ -195,29 +204,101 @@ export async function getAlerts(siteId: string, alertType?: string, isResolved?:
   }));
 }
 
-export async function getEntryExitLog(siteId: string, limit = 50) {
+export interface EntryExitLogFilters {
+  limit?: number;
+  page?: number;
+  from?: string;
+  to?: string;
+  gate?: string;
+  plate?: string;
+  cameraId?: string;
+}
+
+export async function getEntryExitLog(siteId: string, filters: EntryExitLogFilters = {}) {
   const site = await verifySite(siteId);
   const baseUrl = (site.pmsAiBaseUrl || env.PMS_AI_DEFAULT_URL || '').replace(/\/$/, '');
 
-  const rows = await prisma.entryExitLog.findMany({
-    where: { NOT: { isTest: true } },
-    orderBy: { eventTime: 'desc' },
-    take: limit,
+  const limit = filters.limit ?? 50;
+  const page  = filters.page  ?? 1;
+  const skip  = (page - 1) * limit;
+
+  const where: any = { NOT: { isTest: true } };
+  if (filters.from) where.eventTime = { ...where.eventTime, gte: new Date(filters.from + 'T00:00:00.000Z') };
+  if (filters.to)   where.eventTime = { ...where.eventTime, lte: new Date(filters.to   + 'T23:59:59.999Z') };
+  if (filters.gate)     where.gate        = filters.gate;
+  if (filters.plate)    where.plateNumber = { contains: filters.plate, mode: 'insensitive' };
+  if (filters.cameraId) where.cameraId    = filters.cameraId;
+
+  const [rows, totalCount] = await Promise.all([
+    prisma.entryExitLog.findMany({
+      where,
+      orderBy: { eventTime: 'desc' },
+      take: limit,
+      skip,
+    }),
+    prisma.entryExitLog.count({ where }),
+  ]);
+
+  // Build lookup maps for ghost detection and duration computation
+  const exitsByPlate  = new Map<string, Date[]>();
+  const entryTimeById = new Map<number, Date>();
+
+  for (const r of rows) {
+    if (r.gate === 'entry') {
+      entryTimeById.set(r.id, new Date(r.eventTime));
+    } else if (r.gate === 'exit' && r.plateNumber) {
+      if (!exitsByPlate.has(r.plateNumber)) exitsByPlate.set(r.plateNumber, []);
+      exitsByPlate.get(r.plateNumber)!.push(new Date(r.eventTime));
+    }
+  }
+
+  const mappedRows = rows.map((r: any) => {
+    let isGhostEntry = false;
+    if (r.gate === 'entry' && r.plateNumber) {
+      const exits    = exitsByPlate.get(r.plateNumber) ?? [];
+      const entryMs  = new Date(r.eventTime).getTime();
+      isGhostEntry   = exits.some(exitTime => {
+        const diff = entryMs - exitTime.getTime();
+        return diff >= 0 && diff <= 2 * 60 * 1000;
+      });
+    }
+
+    // Compute duration from real timestamps — the AI's parking_duration has a
+    // timezone offset bug so we ignore it.
+    let parkingDurationSeconds: number | null = null;
+    if (r.gate === 'exit' && r.matchedEntryId) {
+      const entryTime = entryTimeById.get(r.matchedEntryId);
+      if (entryTime) {
+        const diffMs = new Date(r.eventTime).getTime() - entryTime.getTime();
+        parkingDurationSeconds = Math.round(diffMs / 1_000);
+      }
+    }
+
+    return {
+      id:                    r.id,
+      plateNumber:           r.plateNumber,
+      vehicleId:             r.vehicleId,
+      vehicleType:           r.vehicleType,
+      gate:                  r.gate,
+      cameraId:              r.cameraId,
+      eventTime:             r.eventTime,
+      parkingDurationSeconds,
+      matchedEntryId:        r.matchedEntryId,
+      createdAt:             r.createdAt,
+      snapshotUrl:           resolveSnapshotUrl(r.snapshotPath, baseUrl),
+      isGhostEntry,
+    };
   });
 
-  return rows.map((r: any) => ({
-    id:              r.id,
-    plateNumber:     r.plateNumber,
-    vehicleId:       r.vehicleId,
-    vehicleType:     r.vehicleType,
-    gate:            r.gate,
-    cameraId:        r.cameraId,
-    eventTime:       r.eventTime,
-    parkingDuration: r.parkingDuration,
-    matchedEntryId:  r.matchedEntryId,
-    createdAt:       r.createdAt,
-    snapshotUrl:     resolveSnapshotUrl(r.snapshotPath, baseUrl),
-  }));
+  return {
+    rows: mappedRows,
+    pagination: {
+      page,
+      limit,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+    },
+  };
 }
 
 export async function getEvents(siteId: string, limit = 50) {
